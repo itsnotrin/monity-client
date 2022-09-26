@@ -1,6 +1,6 @@
-# Monity CLient
+# Monity Client
  
-- [Monity CLient](#monity-client)
+- [Monity Client](#monity-client)
 - [What is monity?](#what-is-monity)
 - [What is monity client for?](#what-is-monity-client-for)
   - [What is monitorable?](#what-is-monitorable)
