@@ -5,6 +5,7 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/limiter"
+	"github.com/shirou/gopsutil/v3/mem"
 )
 
 func main() {
@@ -21,8 +22,9 @@ func main() {
 		},
 	}))
 
-	app.Get("/", func(c *fiber.Ctx) error {
-		return c.SendString("Endpoint is live!")
+	app.Get("/mem", func(c *fiber.Ctx) error {
+		v, _ := mem.VirtualMemory()
+		return c.JSON(fiber.Map{"used_percent": v.UsedPercent})
 	})
 
 	app.Listen(":3000")
