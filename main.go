@@ -2,7 +2,6 @@ package main
 
 import (
 	"time"
-
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/limiter"
 	"github.com/shirou/gopsutil/v3/mem"
@@ -23,8 +22,10 @@ func main() {
 	}))
 
 	app.Get("/mem", func(c *fiber.Ctx) error {
-		v, _ := mem.VirtualMemory()
-		return c.JSON(fiber.Map{"used_percent": v.UsedPercent})
+		v, _ := mem.VirtualMemory() // Use mem from the import.
+        var used_percentage = v.UsedPercent
+        var usedRam = v.Used/1000/1000 // Calculates it approximately to gigabytes from bytes.
+        return c.JSON(fiber.Map{"used_percent": used_percentage, "ram_usage_mb": usedRam})
 	})
 
 	app.Listen(":3000")
