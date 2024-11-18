@@ -3,12 +3,14 @@ package main
 import (
 	"fmt"
 	"math"
+	"runtime"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/limiter"
 	"github.com/shirou/gopsutil/v3/cpu"
 	"github.com/shirou/gopsutil/v3/disk"
+	"github.com/shirou/gopsutil/v3/host"
 	"github.com/shirou/gopsutil/v3/mem"
 )
 
@@ -21,31 +23,19 @@ func toFixed(num float64, precision int) float64 {
 	return float64(round(num*output)) / output
 }
 
-//func stringInSlice(a string, list []string) bool {
-//	for _, b := range list {
-//		if b == a {
-//			return true
-//		}
-//	}
-//	return false
-//}
-
 func main() {
 	app := fiber.New()
 	app.Use(limiter.New(limiter.Config{
 		Max:               20,
 		Expiration:        30 * time.Second,
 		LimiterMiddleware: limiter.SlidingWindow{},
-		// How the Limit works:
-		// weightOfPreviousWindow = previous window's amount request * (whenNewWindow / Expiration)
-		// rate = weightOfPreviousWindow + current window's amount request.
 		LimitReached: func(c *fiber.Ctx) error {
 			return c.Status(403).JSON(fiber.Map{"message": "You've reached the rate limit. Please be patient!", "extra_details": fiber.Map{"IP:": c.IP(), "timeLeft": c.GetRespHeader("Retry-After")}})
 		},
 	}))
 
 	app.Get("/mem", func(c *fiber.Ctx) error {
-		v, _ := mem.VirtualMemory() // Use mem from the import.
+		v, _ := mem.VirtualMemory()
 		var usedPercentage = toFixed(v.UsedPercent, 1)
 		var usedRam = v.Used / 1000 / 1000 // Calculates it approximately to gigabytes from bytes.
 		return c.JSON(fiber.Map{"used_percent": usedPercentage, "ram_usage_mb": usedRam})
@@ -70,23 +60,53 @@ func main() {
 	})
 
 	app.Get("/cpu/percent", func(c *fiber.Ctx) error {
-		v, _ := cpu.Percent(0, false) // CPU Usage
+		v, _ := cpu.Percent(0, false)
 		var usedPercentage = v[0]
 		var cleanUsedPercentage = toFixed(v[0], 1)
 
-		//TODO: Refactor as Switch Case
-		if c.Get("detailed") == "0" {
+		switch c.Get("detailed") {
+		case "0":
 			return c.JSON(fiber.Map{"usage_percentage": cleanUsedPercentage})
-		}
-		if c.Get("detailed") == "1" {
+		case "1":
 			return c.JSON(fiber.Map{"detailed_usage_percentage": usedPercentage})
-		}
-		if c.Get("detailed") == "2" {
+		case "2":
+			return c.JSON(fiber.Map{"detailed_usage_percentage": usedPercentage, "usage_percentage": cleanUsedPercentage})
+		default:
 			return c.JSON(fiber.Map{"detailed_usage_percentage": usedPercentage, "usage_percentage": cleanUsedPercentage})
 		}
-		// If no option is passed, just send both regardless.
-		return c.JSON(fiber.Map{"detailed_usage_percentage": usedPercentage, "usage_percentage": cleanUsedPercentage})
+	})
 
+	app.Get("/cpu/info", func(c *fiber.Ctx) error {
+		info, _ := cpu.Info()
+		return c.JSON(fiber.Map{
+			"cores":      runtime.NumCPU(),
+			"model":      info[0].ModelName,
+			"mhz":        info[0].Mhz,
+			"vendor":     info[0].VendorID,
+			"cache_size": info[0].CacheSize,
+			"microcode":  info[0].Microcode,
+		})
+	})
+
+	app.Get("/system", func(c *fiber.Ctx) error {
+		info, _ := host.Info()
+		uptime := time.Duration(info.Uptime) * time.Second
+
+		return c.JSON(fiber.Map{
+			"hostname": info.Hostname,
+			"os":       info.OS,
+			"platform": info.Platform,
+			"kernel":   info.KernelVersion,
+			"uptime":   uptime.String(),
+			"host_id":  info.HostID,
+		})
+	})
+
+	app.Get("/health", func(c *fiber.Ctx) error {
+		return c.JSON(fiber.Map{
+			"status":    "healthy",
+			"timestamp": time.Now().Format(time.RFC3339),
+		})
 	})
 
 	err := app.Listen(":3000")
