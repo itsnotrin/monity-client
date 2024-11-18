@@ -8,6 +8,7 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/limiter"
 	"github.com/shirou/gopsutil/v3/cpu"
+	"github.com/shirou/gopsutil/v3/disk"
 	"github.com/shirou/gopsutil/v3/mem"
 )
 
@@ -20,14 +21,14 @@ func toFixed(num float64, precision int) float64 {
 	return float64(round(num*output)) / output
 }
 
-func stringInSlice(a string, list []string) bool {
-	for _, b := range list {
-		if b == a {
-			return true
-		}
-	}
-	return false
-}
+//func stringInSlice(a string, list []string) bool {
+//	for _, b := range list {
+//		if b == a {
+//			return true
+//		}
+//	}
+//	return false
+//}
 
 func main() {
 	app := fiber.New()
@@ -48,6 +49,24 @@ func main() {
 		var usedPercentage = toFixed(v.UsedPercent, 1)
 		var usedRam = v.Used / 1000 / 1000 // Calculates it approximately to gigabytes from bytes.
 		return c.JSON(fiber.Map{"used_percent": usedPercentage, "ram_usage_mb": usedRam})
+	})
+
+	app.Get("/disk", func(c *fiber.Ctx) error {
+		partitions, _ := disk.Partitions(false)
+		var diskInfo []fiber.Map
+
+		for _, partition := range partitions {
+			usage, _ := disk.Usage(partition.Mountpoint)
+			diskInfo = append(diskInfo, fiber.Map{
+				"device":       partition.Device,
+				"mountpoint":   partition.Mountpoint,
+				"used_percent": toFixed(usage.UsedPercent, 1),
+				"total_gb":     usage.Total / 1024 / 1024 / 1024,
+				"used_gb":      usage.Used / 1024 / 1024 / 1024,
+				"available_gb": usage.Free / 1024 / 1024 / 1024,
+			})
+		}
+		return c.JSON(fiber.Map{"disks": diskInfo})
 	})
 
 	app.Get("/cpu/percent", func(c *fiber.Ctx) error {
